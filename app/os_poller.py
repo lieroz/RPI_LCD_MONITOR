@@ -9,12 +9,16 @@ import re
 
 
 class OS_poller(Process):
+    SWITCH_OS_INFO_MODULE = 0
+    SWITCH_MODULE_PARAM = 1
+
     def __init__(self, chan_out, chan_in):
         super().__init__()
         self.chan_out = chan_out
         self.chan_in = chan_in
         self.params = [self.cpuinfo, self.meminfo, self.netdevs]
         self.current = 0
+        self.state = OS_poller.SWITCH_OS_INFO_MODULE
 
         self.params[self.current]()
 
@@ -24,17 +28,21 @@ class OS_poller(Process):
         while True:
             pin = self.chan_out.get()
 
-            if pin == GPIO_listener.BUTTON_NEXT_GPIO:
-                self.current += 1
-
-                if self.current >= length:
-                    self.current = 0
-
-            elif pin == GPIO_listener.BUTTON_PREV_GPIO:
+            if pin == GPIO_listener.BUTTON_PREV_GPIO:
                 self.current -= 1
-
                 if self.current < 0:
                     self.current = length - 1
+
+            elif pin == GPIO_listener.BUTTON_STATE_GPIO:
+                if self.state == OS_poller.SWITCH_OS_INFO_MODULE:
+                    self.state = OS_poller.SWITCH_MODULE_PARAM
+                elif self.state == OS_poller.SWITCH_MODULE_PARAM:
+                    self.state = OS_poller.SWITCH_OS_INFO_MODULE
+
+            elif pin == GPIO_listener.BUTTON_NEXT_GPIO:
+                self.current += 1
+                if self.current >= length:
+                    self.current = 0
 
             self.params[self.current]()
 
