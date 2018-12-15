@@ -1,7 +1,20 @@
-import I2C_LCD_driver
-from time import *
+from multiprocessing import Queue
+from gpio_listener import GPIO_listener
+from os_poller import OS_poller
+from lcd_controller import LCD_controller
 
-mylcd = I2C_LCD_driver.lcd()
 
-mylcd.lcd_display_string("SRE QUEST 2!", 1, 2)
-mylcd.lcd_display_string("################", 2)
+if __name__ == '__main__':
+    q1 = Queue()
+    q2 = Queue()
+
+    g = GPIO_listener(q1)
+    osp = OS_poller(q1, q2)
+    lcd = LCD_controller(q2)
+
+    lcd.start()
+    osp.start()
+    
+    lcd.join()
+    osp.join()
+
