@@ -13,17 +13,30 @@ class OS_poller(Process):
         super().__init__()
         self.chan_out = chan_out
         self.chan_in = chan_in
+        self.params = [self.cpuinfo, self.meminfo, self.netdevs]
+        self.current = 0
+
+        self.params[self.current]()
 
     def run(self):
+        length = len(self.params)
+
         while True:
             pin = self.chan_out.get()
 
             if pin == GPIO_listener.BUTTON_NEXT_GPIO:
-                self.cpuinfo()
+                self.current += 1
+
+                if self.current >= length:
+                    self.current = 0
+
             elif pin == GPIO_listener.BUTTON_PREV_GPIO:
-                self.meminfo()
-            else:
-                self.chan_in.put("Not registered input source, plz contact a developer!!!")
+                self.current -= 1
+
+                if self.current < 0:
+                    self.current = length - 1
+
+            self.params[self.current]()
 
     def cpuinfo(self):
         cpuinfo = OrderedDict()
@@ -53,9 +66,8 @@ class OS_poller(Process):
             for line in f:
                 meminfo[line.split(":")[0]] = line.split(":")[1].strip()
         
-        self.chan_in.put("Total memory: {0}".format(meminfo["MemTotal"]))
-        print("Total memory: {0}".format(meminfo["MemTotal"]))
-        print("Free memory: {0}".format(meminfo["MemFree"]))
+        self.chan_in.put("Total memory: {0} | Free memory: {1}".format(
+                    meminfo["MemTotal"], meminfo["MemFree"]))
 
     def netdevs(self):
         with open("/proc/net/dev") as f:
@@ -72,7 +84,9 @@ class OS_poller(Process):
                         float(line[1].split()[8]) / (1024.0 * 1024.0))
         
         for dev in device_data.keys():
-            print("{0}: {1} MiB {2} MiB".format(dev, round(device_data[dev].rx, 2), round(device_data[dev].tx, 2)))
+            self.chan_in.put("{0}: {1} MiB {2} MiB".format(dev, round(device_data[dev].rx, 2),
+                        round(device_data[dev].tx, 2)))
+            break
 
     def process_list(self):
         pids = []

@@ -26,14 +26,14 @@ class LCD_controller(Process):
                 if not self.chan_out.empty():
                     break
 
-                end = begin + 16
+                end = begin + self.LCD_DISPLAY_WIDTH
 
                 if end == length:
                     straight = False
                 elif begin == 0:
                     straight = True
 
-                self.lcd.lcd_display_string(text[begin:end], 2)
+                self.lcd.lcd_display_string(text[begin:end], 1)
                 sleep(LCD_controller.DELAY)
 
                 if straight:
@@ -41,5 +41,5 @@ class LCD_controller(Process):
                 else:
                     begin -= 1
         else:
-            self.lcd.lcd_display_string(text, self.line)
+            self.lcd.lcd_display_string(text, 1)
 
