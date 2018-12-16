@@ -2,23 +2,29 @@ from __future__ import print_function
 from collections import OrderedDict, namedtuple
 from multiprocessing import Process
 from gpio_listener import GPIO_listener
-import pprint
 import os
 import glob
 import re
 
 
 class OS_poller(Process):
-    SWITCH_OS_INFO_MODULE = 0
-    SWITCH_MODULE_PARAM = 1
-
     def __init__(self, chan_out, chan_in):
         super().__init__()
         self.chan_out = chan_out
         self.chan_in = chan_in
-        self.params = [self.cpuinfo, self.meminfo, self.netdevs]
+        self.params = [
+            self.cpuinfo,
+            self.loadavg,
+            self.meminfo,
+            self.meminfo,
+            self.meminfo,
+            self.netdevs,
+            self.process_list,
+            self.detect_devs
+        ]
+        self.mem_params = ["MemTotal", "MemFree", "MemAvailable"]
         self.current = 0
-        self.state = OS_poller.SWITCH_OS_INFO_MODULE
+        self.cur_meminfo = 0
 
         self.params[self.current]()
 
@@ -32,13 +38,6 @@ class OS_poller(Process):
                 self.current -= 1
                 if self.current < 0:
                     self.current = length - 1
-
-            elif pin == GPIO_listener.BUTTON_STATE_GPIO:
-                if self.state == OS_poller.SWITCH_OS_INFO_MODULE:
-                    self.state = OS_poller.SWITCH_MODULE_PARAM
-                elif self.state == OS_poller.SWITCH_MODULE_PARAM:
-                    self.state = OS_poller.SWITCH_OS_INFO_MODULE
-
             elif pin == GPIO_listener.BUTTON_NEXT_GPIO:
                 self.current += 1
                 if self.current >= length:
@@ -54,7 +53,7 @@ class OS_poller(Process):
         with open("/proc/cpuinfo") as f:
             for line in f:
                 if not line.strip():
-                    cpuinfo["proc%s" % nprocs] = procinfo
+                    cpuinfo["proc"] = procinfo
                     nprocs += 1
                     procinfo = OrderedDict()
                 else:
@@ -62,20 +61,32 @@ class OS_poller(Process):
                         procinfo[line.split(":")[0].strip()] = line.split(":")[1].strip()
                     else:
                         procinfo[line.split(":")[0].strip()] = ""
- 
-        for processor in cpuinfo.keys():
-            self.chan_in.put(cpuinfo[processor]["model name"])
-            break
+        
+        self.detect_devs()
+        self.chan_in.put(cpuinfo["proc"]["model name"])
+    
+    def loadavg(self):
+        la = ""
+
+        with open("/proc/loadavg") as f:
+            for line in f:
+                la = line.strip()
+
+        self.chan_in.put("LA: {0}".format(la))
 
     def meminfo(self):
+        if self.cur_meminfo >= len(self.mem_params):
+            self.cur_meminfo = 0
+
         meminfo = OrderedDict()
 
         with open("/proc/meminfo") as f:
             for line in f:
                 meminfo[line.split(":")[0]] = line.split(":")[1].strip()
         
-        self.chan_in.put("Total memory: {0} | Free memory: {1}".format(
-                    meminfo["MemTotal"], meminfo["MemFree"]))
+        param = self.mem_params[self.cur_meminfo]
+        self.chan_in.put("{0}: {1}".format(param, meminfo[param]))
+        self.cur_meminfo += 1
 
     def netdevs(self):
         with open("/proc/net/dev") as f:
@@ -92,7 +103,8 @@ class OS_poller(Process):
                         float(line[1].split()[8]) / (1024.0 * 1024.0))
         
         for dev in device_data.keys():
-            self.chan_in.put("{0}: {1} MiB {2} MiB".format(dev, round(device_data[dev].rx, 2),
+            self.chan_in.put("{0} recieve: {1} MiB | transmit: {2} MiB".format(dev, 
+                        round(device_data[dev].rx, 2), 
                         round(device_data[dev].tx, 2)))
             break
 
@@ -103,7 +115,7 @@ class OS_poller(Process):
             if subdir.isdigit():
                 pids.append(subdir)
 
-        print("Total number of running processes: {0}".format(len(pids)))
+        self.chan_in.put("Running processes: {0}".format(len(pids)))
 
 
     def size(self, device):
@@ -117,5 +129,6 @@ class OS_poller(Process):
         for device in glob.glob("/sys/block/*"):
             for pattern in dev_pattern:
                 if re.compile(pattern).match(os.path.basename(device)):
-                    print("Device:: {0}, Size:: {1} GiB".format(device, self.size(device)))
+                    self.chan_in.put("Device: {0}, Size: {1} GiB".format(device, self.size(device)))
+                    return
 
