@@ -1,6 +1,7 @@
 from multiprocessing import Process
 from I2C_LCD_driver import LCD
 from time import sleep
+import sys
 
 
 class LCD_controller(Process):
@@ -12,12 +13,11 @@ class LCD_controller(Process):
         self.chan_out = chan_out
         self.lcd = LCD()
 
-        self.write_string("SYSTEM UP BRO...")
-        sleep(5)
-
     def run(self):
         while True:
             data = self.chan_out.get()
+            if data == "exit":
+                sys.exit(0)
             self.write_string(data)
 
     def write_string(self, text):
@@ -45,7 +45,4 @@ class LCD_controller(Process):
                     begin -= 1
         else:
             self.lcd.lcd_display_string(text, 1)
-
-    def __del__(self):
-        self.write_string("SHUTTING DOWN...")
 

@@ -7,11 +7,6 @@ import glob
 import re
 
 
-def generic_signal_handler(_signo, _stack_frame):
-    print("Bye")
-    sys.exit(0)
-
-
 class OS_poller(Process):
     def __init__(self, chan_out, chan_in):
         super().__init__()
