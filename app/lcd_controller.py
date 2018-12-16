@@ -12,6 +12,9 @@ class LCD_controller(Process):
         self.chan_out = chan_out
         self.lcd = LCD()
 
+        self.write_string("SYSTEM UP BRO...")
+        sleep(5)
+
     def run(self):
         while True:
             data = self.chan_out.get()
@@ -42,4 +45,7 @@ class LCD_controller(Process):
                     begin -= 1
         else:
             self.lcd.lcd_display_string(text, 1)
+
+    def __del__(self):
+        self.write_string("SHUTTING DOWN...")
 
